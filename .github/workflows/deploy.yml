@@ -1,4 +1,6 @@
+
 name: Deploy college site
+
 on:
   push:
     branches: [main]
@@ -7,24 +9,51 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Write build info
+        shell: bash
         run: |
           REDEPLOYED=false
-          if [ "${{ github.run_number }}" -ge 2 ]; then REDEPLOYED=true; fi
+          if [ "${{ github.run_number }}" -ge 2 ]; then
+            REDEPLOYED=true
+          fi
+
           printf '{"deployed_by":"github-actions","sha":"%s","run":%s,"redeployed":%s}\n' \
-            "${{ github.sha }}" "${{ github.run_number }}" "$REDEPLOYED" > site/build.json
+            "${{ github.sha }}" \
+            "${{ github.run_number }}" \
+            "$REDEPLOYED" > site/build.json
 
       - name: Upload to Azure Storage
         env:
           SAS: ${{ secrets.AZURE_SAS_TOKEN }}
+          STORAGE_ACCOUNT: ${{ vars.STORAGE_ACCOUNT }}
         run: |
+          if [ -z "$SAS" ]; then
+            echo "Error: AZURE_SAS_TOKEN secret is missing"
+            exit 1
+          fi
+
+          if [ -z "$STORAGE_ACCOUNT" ]; then
+            echo "Error: STORAGE_ACCOUNT variable is missing"
+            exit 1
+          fi
+
+          if [ ! -f site/index.html ]; then
+            echo "Error: site/index.html not found"
+            exit 1
+          fi
+
           az storage blob upload-batch \
-            --account-name "${{ vars.STORAGE_ACCOUNT }}" \
+            --account-name "$STORAGE_ACCOUNT" \
             --sas-token "$SAS" \
-            --destination site --source site --overwrite \
-            --content-cache-control "no-cache" \
+            --destination '$web' \
+            --source site \
+            --overwrite \
+            --auth-mode key \
             --output none
-          echo "Site: https://${{ vars.STORAGE_ACCOUNT }}.blob.core.windows.net/site/index.html"
+
+          echo "Deployment upload completed."
