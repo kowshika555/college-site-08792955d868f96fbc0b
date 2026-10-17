@@ -11,11 +11,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Write build info
-        shell: bash
         run: |
           REDEPLOYED=false
           if [ "${{ github.run_number }}" -ge 2 ]; then
@@ -30,30 +28,14 @@ jobs:
       - name: Upload to Azure Storage
         env:
           SAS: ${{ secrets.AZURE_SAS_TOKEN }}
-          STORAGE_ACCOUNT: ${{ vars.STORAGE_ACCOUNT }}
         run: |
-          if [ -z "$SAS" ]; then
-            echo "Error: AZURE_SAS_TOKEN secret is missing"
-            exit 1
-          fi
-
-          if [ -z "$STORAGE_ACCOUNT" ]; then
-            echo "Error: STORAGE_ACCOUNT variable is missing"
-            exit 1
-          fi
-
-          if [ ! -f site/index.html ]; then
-            echo "Error: site/index.html not found"
-            exit 1
-          fi
-
           az storage blob upload-batch \
-            --account-name "$STORAGE_ACCOUNT" \
+            --account-name "${{ vars.STORAGE_ACCOUNT }}" \
             --sas-token "$SAS" \
-            --destination '$web' \
+            --destination site \
             --source site \
             --overwrite \
-            --auth-mode key \
+            --content-cache-control "no-cache" \
             --output none
 
-          echo "Deployment upload completed."
+          echo "Site: https://${{ vars.STORAGE_ACCOUNT }}.blob.core.windows.net/site/index.html"
